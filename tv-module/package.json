@@ -1,8 +1,0 @@
-{
-  "name": "live-tv",
-  "version": "1.0.0",
-  "description": "Live TV App for TizenBrew",
-  "author": "Harsh",
-  "license": "MIT",
-  "main": "index.js"
-}
