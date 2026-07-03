@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#020617">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="preconnect" href="https://raw.githubusercontent.com">
+    <link rel="preconnect" href="https://cdn.tailwindcss.com">
+    
+    <title>Live TV | Feather</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📺</text></svg>">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { 
+            box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent; 
+            touch-action: manipulation; 
+            scrollbar-width: none; /* Firefox hide scrollbar globally for app feel */
+        }
+        *::-webkit-scrollbar { display: none; } /* Chrome hide scrollbar */
+        
+        body {
+            background-color: #020617; 
+            color: #ffffff;
+            font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+            margin: 0;
+            overflow-x: hidden;
+            user-select: none; 
+            /* Use dvh for mobile to handle disappearing URL bars */
+            height: 100vh;
+            height: 100dvh; 
+            display: flex;
+            flex-direction: column;
+            overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile */
+        }
+
+        /* Improved global focus ring for TV/Keyboard ONLY. Touch won't see this */
+        :focus { outline: none; }
+        :focus-visible {
+            outline: 3px solid #0ea5e9;
+            outline-offset: 2px;
+            z-index: 10;
+            border-color: transparent !important;
+        }
+        
+        a { text-decoration: none; color: inherit; }
+
+        #appContainer {
+            padding: calc(env(safe-area-inset-top, 12px) + 7px) calc(env(safe-area-inset-right, 0px) + 7px) 0 calc(env(safe-area-inset-left, 0px) + 7px);
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .cats {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 12px;
+            margin-bottom: 0px; 
+            flex-shrink: 0; 
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .chip {
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 9999px; /* Fully rounded */
+            font-size: 13px;
+            font-weight: 500;
+            color: #94a3b8;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            /* Hardware Acceleration for smoother TV scrolling */
+            will-change: transform, background;
+            transform: translateZ(0);
+        }
+        
+        .chip:hover {
+            transform: translateY(-2px) translateZ(0);
+            background: linear-gradient(145deg, #2dd4bf, #0284c7);
+            color: white;
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 10px 15px -3px rgba(2, 132, 199, 0.4), 0 4px 6px -2px rgba(2, 132, 199, 0.2);
+        }
+
+        .chip.active {
+            background: linear-gradient(135deg, #ec4899, #8b5cf6, #3b82f6);
+            background-size: 200% 200%;
+            animation: gradient-x 3s ease infinite;
+            color: #ffffff;
+            border-color: transparent;
+            font-weight: 700;
+            box-shadow: 0 0 15px rgba(236, 72, 153, 0.5);
+            transform: scale(1.05) translateZ(0);
+        }
+        
+        .chip.backup-btn {
+            background: linear-gradient(145deg, #334155, #1e293b);
+            color: #e2e8f0;
+            border-style: dashed;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(85px, 1fr)); 
+            gap: 10px;
+            padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px));
+        }
+        @media (min-width: 640px) {
+            .grid { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 14px; }
+            .card { padding: 12px !important; }
+            .card img { width: 55px !important; height: 55px !important; }
+            .card h3 { font-size: 12px !important; }
+            .card p { font-size: 10px !important; }
+            .card .emoji-icon { width: 55px !important; height: 55px !important; font-size: 26px !important; }
+        }
+        @media (min-width: 1024px) {
+            .grid { grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: 16px; }
+            .card { padding: 14px !important; }
+            .card img { width: 65px !important; height: 65px !important; }
+            .card h3 { font-size: 14px !important; margin-bottom: 6px !important; }
+            .card p { font-size: 11px !important; }
+            .card .emoji-icon { width: 65px !important; height: 65px !important; font-size: 30px !important; }
+        }
+
+        .card {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 8px;
+            padding: 10px 6px 8px 6px;
+            text-align: center;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            transition: transform 0.1s, border-color 0.2s, background-color 0.2s;
+            /* Optimizations for complex DOM on TVs */
+            contain: content;
+            will-change: transform;
+            transform: translateZ(0);
+        }
+        .card:focus-visible {
+            background-color: #1e293b;
+            transform: scale(1.05) translateZ(0);
+            box-shadow: 0 4px 20px rgba(14, 165, 233, 0.3);
+        }
+        .card:active { transform: scale(0.96) translateZ(0); }
+
+        .card img {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            background: #000;
+            object-fit: contain;
+            margin: 0 auto 8px auto;
+        }
+
+        .card h3 {
+            font-size: 11px;
+            margin: 0 0 3px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .card p {
+            font-size: 9px;
+            color: #888;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .live {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #cc0000;
+            color: #fff;
+            font-size: 7px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .fav-btn {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            z-index: 5;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        .msg {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 30px;
+            color: #777;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: max(20px, env(safe-area-inset-bottom));
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ffffff;
+            color: #000000;
+            padding: 12px 24px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            opacity: 0;
+            z-index: 99;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            will-change: opacity;
+        }
+        .toast.show { opacity: 1; }
+
+        @keyframes gradient-x {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        #playerContainer {
+            background-color: #0f0f13;
+        }
+        
+        .player-top-bar {
+            background: transparent;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            gap: 12px;
+        }
+
+        .action-btn-pill {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 8px 18px;
+            border-radius: 9999px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            transform: translateZ(0); /* Hardware accel */
+        }
+        .action-btn-pill:hover { background: rgba(255, 255, 255, 0.15); }
+        .action-btn-pill:active { transform: scale(0.95) translateZ(0); }
+
+        .fs-btn-pill {
+            background: linear-gradient(90deg, #9333ea, #06b6d4);
+            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.3), inset 0 0 0 1px rgba(255,255,255,0.2);
+            padding: 10px 24px;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+            color: #fff;
+            font-weight: 700;
+            border: none;
+        }
+        .fs-btn-pill:hover {
+            box-shadow: 0 6px 20px rgba(6, 182, 212, 0.5), inset 0 0 0 1px rgba(255,255,255,0.3);
+            transform: scale(1.02) translateZ(0);
+        }
+
+        .live-pill {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 4px 12px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #playerSidebar {
+            background: linear-gradient(180deg, rgba(60, 25, 30, 0.7) 0%, rgba(20, 20, 24, 0.9) 50%, rgba(15, 15, 18, 1) 100%);
+            border: 1px solid rgba(255,255,255,0.03);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            overflow: hidden; 
+        }
+
+        .sidebar-title {
+            background: linear-gradient(90deg, #38bdf8, #818cf8, #e879f9);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .yt-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 16px;
+            margin: 4px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            border: 1px solid transparent;
+            will-change: background-color;
+        }
+        .yt-list-item:hover {
+            background-color: rgba(255,255,255,0.04);
+        }
+        .yt-list-item.active {
+            background-color: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.03);
+        }
+        
+        .yt-list-item img {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #000;
+            object-fit: contain;
+            flex-shrink: 0;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .active-dot {
+            width: 6px;
+            height: 6px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            display: none;
+            box-shadow: 0 0 8px #ef4444;
+            flex-shrink: 0;
+        }
+        .yt-list-item.active .active-dot {
+            display: block;
+        }
+
+        #videoWrapper {
+            background-color: #000;
+            position: relative;
+            z-index: 40;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            border: 1px solid rgba(255,255,255,0.05);
+            /* Hardware accelerate video container */
+            transform: translateZ(0); 
+        }
+
+        #playerIframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        .player-content-area {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 0 16px 16px 16px;
+            flex-grow: 1;
+            overflow: hidden;
+        }
+
+        @media (max-width: 767px) {
+            .player-top-bar { padding: 12px 16px; }
+            .player-content-area { padding: 0 12px 12px 12px; }
+            
+            #videoWrapper {
+                width: 100%;
+                aspect-ratio: 16 / 9;
+                order: 1; /* Video on Top */
+                flex-shrink: 0;
+            }
+            #playerSidebar {
+                order: 2; /* Sidebar on Bottom */
+                flex-grow: 1;
+            }
+        }
+
+        @media (min-width: 768px) {
+            .player-content-area {
+                flex-direction: row;
+                padding: 0 24px 24px 24px;
+                gap: 24px;
+            }
+            
+            #playerSidebar {
+                width: 320px;
+                order: 1; 
+                flex-shrink: 0;
+                display: flex;
+                flex-direction: column;
+            }
+            
+            #videoWrapper {
+                flex-grow: 1;
+                order: 2; 
+                height: 100%;
+            }
+        }
+
+        /* Fullscreen handling */
+        #videoWrapper:fullscreen { border-radius: 0 !important; border: none !important; }
+        #videoWrapper:-webkit-full-screen { border-radius: 0 !important; border: none !important; }
+        #videoWrapper:fullscreen #playerIframe { border-radius: 0 !important; }
+        #videoWrapper:-webkit-full-screen #playerIframe { border-radius: 0 !important; }
+
+        /* TIZEN / TV SPECIFIC OPTIMIZATIONS */
+        body.tv-mode .backdrop-blur-2xl, 
+        body.tv-mode .backdrop-blur-md,
+        body.tv-mode .backdrop-blur,
+        body.tv-mode .fav-btn { 
+            backdrop-filter: none !important; 
+            -webkit-backdrop-filter: none !important; 
+            background-color: #0f172a !important; 
+            border: none !important;
+        }
+        
+        body.tv-mode .animate-pulse, 
+        body.tv-mode .animate-gradient-x,
+        body.tv-mode .animate-ping { 
+            animation: none !important; 
+            background-position: 0% 50% !important;
+        }
+        body.tv-mode * {
+            transition-duration: 0.1s !important; 
+        }
+        
+        /* Aggressive Focus Ring for TV Navigation */
+        body.tv-mode :focus {
+            outline: 6px solid #0ea5e9 !important; 
+            outline-offset: -2px !important; 
+            background-color: #1e293b !important;
+            transform: scale(1.08) translateZ(0) !important; 
+            z-index: 50 !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.9) !important;
+        }
+        body.tv-mode .chip:focus {
+             background: #ffffff !important;
+             color: #000000 !important;
+        }
+    </style>
+</head>
+<body>
+
+<div id="appContainer">
+    <div class="w-full mb-3">
+        <div class="cats w-full" id="categoryContainer" role="tablist"></div>
+    </div>
+
+    <div class="grid" id="channelGrid">
+        <div class="msg">Loading Channels...</div>
+    </div>
+</div>
+
+<div id="playerContainer" class="fixed inset-0 z-[100] hidden flex-col h-[100dvh]">
+    
+    <!-- Top Header Bar -->
+    <div class="player-top-bar">
+        <!-- Back Button -->
+        <button onclick="closePlayer()" class="action-btn-pill" tabindex="0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            <span class="hidden sm:inline">Back</span>
+        </button>
+        
+        <!-- Full Screen Button (Centered) - Now visible on mobile devices too -->
+        <button onclick="togglePlayerFullscreen()" class="action-btn-pill fs-btn-pill flex" tabindex="0">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+            <span class="hidden sm:inline">FULL SCREEN</span>
+        </button>
+        
+        <!-- Live Badge (Channel name removed from header per user request) -->
+        <div class="flex items-center gap-3 md:gap-4">
+            <div class="live-pill">
+                <span class="relative flex h-2 w-2">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                </span>
+                <span class="text-[10px] font-bold text-slate-300 tracking-wider">LIVE</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="player-content-area">
+        
+        <!-- Sidebar (Left on Desktop, Bottom on Mobile) -->
+        <div id="playerSidebar">
+            <div class="p-5 pb-2">
+                <h2 id="sidebarCategoryTitle" class="sidebar-title">ALL CHANNELS</h2>
+            </div>
+            
+            <div id="sidebarList" class="flex-1 overflow-y-auto pb-4">
+                <!-- Dynamically filled -->
+            </div>
+        </div>
+
+        <!-- Video Player (Right on Desktop, Top on Mobile) -->
+        <div id="videoWrapper">
+            <iframe 
+                id="playerIframe"
+                src="" 
+                allow="autoplay; encrypted-media; fullscreen; picture-in-picture" 
+                sandbox="allow-scripts allow-same-origin allow-presentation"
+                allowfullscreen>
+            </iframe>
+        </div>
+        
+    </div>
+</div>
+
+<div id="toastMsg" class="toast"></div>
+
+<script>
+    // Smart TV Detection (Optimized for Tizen / WebOS)
+    const ua = navigator.userAgent;
+    const isSmartTV = /Tizen|Web0S|SmartTV|SMART-TV|Roku|AppleTV/i.test(ua);
+    if (isSmartTV) {
+        document.body.classList.add('tv-mode');
+    }
+
+    const grid = document.getElementById('channelGrid');
+    const categoryContainer = document.getElementById('categoryContainer');
+    const appContainer = document.getElementById('appContainer');
+    const playerContainer = document.getElementById('playerContainer');
+    const playerIframe = document.getElementById('playerIframe');
+    const sidebarList = document.getElementById('sidebarList');
+
+    let allChannels = [];
+    let activeCategory = window.location.hash ? decodeURIComponent(window.location.hash.substring(1)) : 'All';
+    let genres = new Set();
+    
+    let favorites = JSON.parse(localStorage.getItem('tvFavoritesLite') || '[]');
+    // Default AutoFS is ON
+    let isAutoFS = localStorage.getItem('tvAutoFS') !== 'false';
+    let autoFsTimer;
+
+    function getFullscreenElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+    }
+
+    function exitFullscreen() {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const importFavs = urlParams.get('favs');
+    if (importFavs) {
+        try {
+            const importedList = JSON.parse(decodeURIComponent(importFavs));
+            if (Array.isArray(importedList)) {
+                let addedCount = 0;
+                importedList.forEach(f => {
+                    if (!favorites.includes(f)) { favorites.push(f); addedCount++; }
+                });
+                localStorage.setItem('tvFavoritesLite', JSON.stringify(favorites));
+                setTimeout(() => showToast(`Imported ${addedCount} favorites!`), 1000);
+            }
+        } catch(e) {}
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    const DATA_URL = 'https://raw.githubusercontent.com/tuhinpal/JioTV-API/main/channels.json';
+
+    const infinityApps = [
+        { name: "GDL TV", url: "https://gdltv.live/", icon: "📡", grad: "linear-gradient(135deg, #f43f5e, #8b5cf6)" },
+        { name: "Momix", url: "https://momixtv-jiotv.pages.dev/", icon: "💎", grad: "linear-gradient(135deg, #0ea5e9, #6366f1)" },
+        { name: "AIO", url: "https://allinonereborn-livetv-hub.pages.dev/", icon: "⚡", grad: "linear-gradient(135deg, #f59e0b, #ef4444)" },
+        { name: "Netflix", url: "https://skyflixer.fun/browse", icon: "🍿", grad: "linear-gradient(135deg, #10b981, #3b82f6)" }
+    ];
+
+    const categoryIcons = {
+        'All': '📺', 'Favorites': '❤️', 'Fun-Ment': '🎭', 
+        'Movies': '🎬', 'Kids': '🧸', 'Info': '🌎', 'News': '📰'
+    };
+
+    async function fetchData() {
+        try {
+            const response = await fetch(DATA_URL);
+            if (!response.ok) throw new Error("Net Error");
+            const rawData = await response.json();
+            const channelArray = Array.isArray(rawData) ? rawData : (rawData.result || rawData.channels || []);
+            processChannels(channelArray);
+        } catch (error) {
+            loadFallbackData();
+        }
+    }
+
+    function processChannels(data) {
+        genres.clear();
+        genres.add('All');
+        genres.add('Favorites');
+
+        let processed = data.map(ch => {
+            let chanName = ch.channel_name || ch.name || 'Unknown';
+            let imgUrl = ch.logoUrl || ch.image || 'https://via.placeholder.com/130x130.png?text=TV';
+            let linkUrl = `https://momixtv-jiotv.pages.dev/jioplayer.html?id=${ch.channel_id || ch.id || ''}`;
+            let genreName = ch.category_name || ch.category || 'General';
+
+            if (chanName.toLowerCase().includes('sony sab sd') || chanName.toLowerCase().includes('sab tv sd') || chanName.toLowerCase() === 'sab sd') {
+                chanName = 'Sony SAB SD'; imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/Sony_SAB.png'; linkUrl = 'https://jtvxweb.pages.dev/pind?id=154';
+            } else if (chanName.toLowerCase().includes('sony sab') || chanName.toLowerCase().includes('sab tv') || chanName.toLowerCase() === 'sab') { 
+                chanName = 'Sony SAB HD'; imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/Sony_SAB.png'; linkUrl = 'https://jtvxweb.pages.dev/pind?id=471'; 
+            }
+            if (chanName.toLowerCase() === 'colors tv' || chanName.toLowerCase() === 'colors') { chanName = 'Colors Tv HD'; imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/Colors_HD.png'; linkUrl = 'https://jtvxweb.pages.dev/pind?id=144'; }
+            if (chanName.toLowerCase().includes('tlc')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=479';
+            if (chanName.toLowerCase().includes('nat geo wild') || chanName.toLowerCase() === 'nat geo') linkUrl = 'https://jtvxweb.pages.dev/pind?id=377';
+            if (chanName.toLowerCase().includes('history tv')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=146';
+            if (chanName.toLowerCase().includes('travel xp')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=164';
+            if (chanName.toLowerCase().includes('aaj tak')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=173';
+            if (chanName.toLowerCase().includes('dd news')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=203';
+            if (chanName.toLowerCase().includes('rishtey')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=279';
+            if (chanName.toLowerCase().includes('and tv') || chanName.toLowerCase().includes('& tv')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=472';
+            if (chanName.toLowerCase().includes('sony pal') || chanName.toLowerCase().includes('sonypal')) linkUrl = 'https://allinonereborn.sbs/sony/ptest.php?id=sony-pal';
+            if (chanName.toLowerCase().includes('star plus')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=490';
+            if (chanName.toLowerCase().includes('mtv')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=248';
+            if (chanName.toLowerCase().includes('zee tv')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=167';
+            if (chanName.toLowerCase() === 'set sd' || chanName.toLowerCase() === 'sony entertainment television') linkUrl = 'https://jtvxweb.pages.dev/pind?id=521';
+            if (chanName.toLowerCase().includes('big magic')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=132';
+            if (chanName.toLowerCase().includes('cartoon network') || chanName.toLowerCase() === 'cn') linkUrl = 'https://jtvxweb.pages.dev/pind?id=423';
+            if (chanName.toLowerCase() === 'star gold') linkUrl = 'https://jtvxweb.pages.dev/pind?id=156';
+            if (chanName.toLowerCase().includes('star gold 2')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=524';
+            if (chanName.toLowerCase().includes('star gold romance')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=525';
+            if (chanName.toLowerCase().includes('star gold thrills')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=526';
+            if (chanName.toLowerCase().includes('sony max')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=476';
+            if (chanName.toLowerCase().includes('zee cinema')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=484';
+            if (chanName.toLowerCase().includes('& pictures') || chanName.toLowerCase().includes('and pictures')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=185';
+            if (chanName.toLowerCase().includes('disney')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=1373';
+            if (chanName.toLowerCase() === 'hungama' || chanName.toLowerCase() === 'hungama tv') linkUrl = 'https://jtvxweb.pages.dev/pind?id=1391';
+            if (chanName.toLowerCase().includes('super hungama') || chanName.toLowerCase().includes('hungama super')) linkUrl = 'https://jtvxweb.pages.dev/pind?id=1392';
+            if (chanName.toLowerCase().includes('sony yay')) { linkUrl = 'https://jtvxweb.pages.dev/pind?id=872'; imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/SonyYAYHin.png'; genreName = 'Kids'; }
+
+            if (chanName.toLowerCase() === 'set sd' || chanName.toLowerCase() === 'sony entertainment television') imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/Sony_SD.png';
+            if (chanName.toLowerCase().includes('mtv')) imgUrl = 'https://cdn.brandfetch.io/idG02Aquas/w/400/h/400/theme/dark/icon.png?c=1bxid64Mup7aczewSAYMX&t=1667701258766';
+            if (chanName.toLowerCase().includes('star plus')) imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/Star_Plus_HD.png';
+            if (chanName.toLowerCase().includes('colors rishtey')) imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/ColorsRishtey.png';
+            if (chanName.toLowerCase().includes('zee cinema')) imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/ZeeCinemaHD.png';
+            if (chanName.toLowerCase().includes('sony max')) imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/SonyMAX.png';
+            if (chanName.toLowerCase() === 'star gold') imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/Star_Gold_HD.png';
+            if (chanName.toLowerCase().includes('dd news')) imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/DD_News.png';
+            if (chanName.toLowerCase().includes('aaj tak')) imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/Aaj_Tak.png';
+            if (chanName.toLowerCase().includes('travel xp')) imgUrl = 'https://jiotv.catchup.cdn.jio.com/dare_images/images/Travel_XP_HD.png';
+            if (chanName.toLowerCase() === 'zee tv' || chanName.toLowerCase() === 'zee tv hd') imgUrl = 'https://jiotvimages.cdn.jio.com/dare_images/images/ZeeTVHD.png';
+            if (chanName.toLowerCase() === 'hungama' || chanName.toLowerCase() === 'hungama tv') imgUrl = 'https://jiotvimages.cdn.jio.com/dare_images/images/Hungama.png';
+            if (chanName.toLowerCase().includes('super hungama') || chanName.toLowerCase().includes('hungama super')) imgUrl = 'https://jiotvimages.cdn.jio.com/dare_images/images/Super_Hungama.png';
+            if (chanName.toLowerCase().includes('disney')) imgUrl = 'https://jiotvimages.cdn.jio.com/dare_images/images/Disney_Channel.png';
+            if (chanName.toLowerCase().includes('cartoon network') || chanName.toLowerCase() === 'cn') imgUrl = 'https://jiotvimages.cdn.jio.com/dare_images/images/CNHindi.png';
+            if (chanName.toLowerCase().includes('tlc')) imgUrl = 'https://jiotvimages.cdn.jio.com/dare_images/images/TLCHDHindi.png';
+            if (chanName.toLowerCase().includes('history tv')) imgUrl = 'https://jiotvimages.cdn.jio.com/dare_images/images/History_HD.png';
+            if (chanName.toLowerCase().includes('nat geo wild') || chanName.toLowerCase() === 'nat geo') imgUrl = 'https://jiotvimages.cdn.jio.com/dare_images/images/Nat_Geo_Wild_HD.png';
+            if (chanName.toLowerCase().includes('& pictures') || chanName.toLowerCase().includes('and pictures')) imgUrl = 'https://jiotvimages.cdn.jio.com/dare_images/images/AndPicturesHD.png';
+
+            if (genreName === 'Entertainment') genreName = 'Fun-Ment';
+            if (genreName === 'Infotainment') genreName = 'Info';
+
+            genres.add(genreName);
+            return { name: chanName, image: imgUrl, link: linkUrl, genre: genreName };
+        });
+
+        const sabIndex = processed.findIndex(c => c.name === 'Sony SAB HD');
+        if (sabIndex > -1) processed.unshift(processed.splice(sabIndex, 1)[0]);
+        else processed.unshift({ name: "Sony SAB HD", link: "https://jtvxweb.pages.dev/pind?id=471", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Sony_SAB.png", genre: "Fun-Ment" });
+
+        const yayIndex = processed.findIndex(c => c.name.toLowerCase().includes('sony yay'));
+        if (yayIndex === -1) {
+            processed.push({ name: "Sony Yay", link: "https://jtvxweb.pages.dev/pind?id=872", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/SonyYAYHin.png", genre: "Kids" });
+            genres.add("Kids");
+        }
+
+        allChannels = processed;
+        finishSetup();
+    }
+
+    function loadFallbackData() {
+        genres.clear();
+        genres.add('All');
+        genres.add('Favorites');
+        const fallbackData = [
+            { name: "Sony SAB HD", link: "https://jtvxweb.pages.dev/pind?id=471", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Sony_SAB.png", genre: "Fun-Ment" },
+            { name: "Colors HD", link: "https://jtvxweb.pages.dev/pind?id=144", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Colors_HD.png", genre: "Fun-Ment" },
+            { name: "Colors Rishtey", link: "https://jtvxweb.pages.dev/pind?id=279", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/ColorsRishtey.png", genre: "Fun-Ment" },
+            { name: "Sony SAB SD", link: "https://jtvxweb.pages.dev/pind?id=154", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Sony_SAB.png", genre: "Fun-Ment" },
+            { name: "And TV HD", link: "https://jtvxweb.pages.dev/pind?id=472", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/And_TV_HD.png", genre: "Fun-Ment" },
+            { name: "Sony Pal", link: "https://allinonereborn.sbs/sony/ptest.php?id=sony-pal", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Sony_Pal.png", genre: "Fun-Ment" },
+            { name: "Star Plus HD", link: "https://jtvxweb.pages.dev/pind?id=490", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Star_Plus_HD.png", genre: "Fun-Ment" },
+            { name: "MTV HD", link: "https://jtvxweb.pages.dev/pind?id=248", image: "https://cdn.brandfetch.io/idG02Aquas/w/400/h/400/theme/dark/icon.png?c=1bxid64Mup7aczewSAYMX&t=1667701258766", genre: "Fun-Ment" },
+            { name: "Zee TV", link: "https://jtvxweb.pages.dev/pind?id=167", image: "https://jiotvimages.cdn.jio.com/dare_images/images/ZeeTVHD.png", genre: "Fun-Ment" },
+            { name: "Big Magic", link: "https://jtvxweb.pages.dev/pind?id=132", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Big_Magic.png", genre: "Fun-Ment" },
+            { name: "Set SD", link: "https://jtvxweb.pages.dev/pind?id=521", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Sony_SD.png", genre: "Fun-Ment" },
+            { name: "Star Gold", link: "https://jtvxweb.pages.dev/pind?id=156", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Star_Gold_HD.png", genre: "Movies" },
+            { name: "Star Gold 2 HD", link: "https://jtvxweb.pages.dev/pind?id=524", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Star_Gold_2_HD.png", genre: "Movies" },
+            { name: "Star Gold Romance", link: "https://jtvxweb.pages.dev/pind?id=525", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Star_Gold_Romance.png", genre: "Movies" },
+            { name: "Star Gold Thrills", link: "https://jtvxweb.pages.dev/pind?id=526", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Star_Gold_Thrills.png", genre: "Movies" },
+            { name: "Sony Max", link: "https://jtvxweb.pages.dev/pind?id=476", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/SonyMAX.png", genre: "Movies" },
+            { name: "Zee Cinema", link: "https://jtvxweb.pages.dev/pind?id=484", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/ZeeCinemaHD.png", genre: "Movies" },
+            { name: "& Pictures", link: "https://jtvxweb.pages.dev/pind?id=185", image: "https://jiotvimages.cdn.jio.com/dare_images/images/AndPicturesHD.png", genre: "Movies" },
+            { name: "Cartoon Network", link: "https://jtvxweb.pages.dev/pind?id=423", image: "https://jiotvimages.cdn.jio.com/dare_images/images/CNHindi.png", genre: "Kids" },
+            { name: "Disney Channel", link: "https://jtvxweb.pages.dev/pind?id=1373", image: "https://jiotvimages.cdn.jio.com/dare_images/images/Disney_Channel.png", genre: "Kids" },
+            { name: "Sony Yay", link: "https://jtvxweb.pages.dev/pind?id=872", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/SonyYAYHin.png", genre: "Kids" },
+            { name: "Hungama TV", link: "https://jtvxweb.pages.dev/pind?id=1391", image: "https://jiotvimages.cdn.jio.com/dare_images/images/Hungama.png", genre: "Kids" },
+            { name: "Hungama Super", link: "https://jtvxweb.pages.dev/pind?id=1392", image: "https://jiotvimages.cdn.jio.com/dare_images/images/Super_Hungama.png", genre: "Kids" },
+            { name: "Nat Geo", link: "https://jtvxweb.pages.dev/pind?id=377", image: "https://jiotvimages.cdn.jio.com/dare_images/images/Nat_Geo_Wild_HD.png", genre: "Info" },
+            { name: "TLC", link: "https://jtvxweb.pages.dev/pind?id=479", image: "https://jiotvimages.cdn.jio.com/dare_images/images/TLCHDHindi.png", genre: "Info" },
+            { name: "History TV 18", link: "https://jtvxweb.pages.dev/pind?id=146", image: "https://jiotvimages.cdn.jio.com/dare_images/images/History_HD.png", genre: "Info" },
+            { name: "Travel XP", link: "https://jtvxweb.pages.dev/pind?id=164", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Travel_XP_HD.png", genre: "Info" },
+            { name: "Aaj Tak", link: "https://jtvxweb.pages.dev/pind?id=173", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/Aaj_Tak.png", genre: "News" },
+            { name: "DD News", link: "https://jtvxweb.pages.dev/pind?id=203", image: "https://jiotv.catchup.cdn.jio.com/dare_images/images/DD_News.png", genre: "News" }
+        ];
+
+        allChannels = fallbackData.map(ch => {
+            genres.add(ch.genre);
+            return { name: ch.name, link: ch.link || `https://momixtv-jiotv.pages.dev/jioplayer.html?id=${ch.id}`, image: ch.image, genre: ch.genre };
+        });
+        finishSetup();
+    }
+
+    function finishSetup() {
+        let hashVal = window.location.hash ? decodeURIComponent(window.location.hash.substring(1)) : 'All';
+        
+        if (hashVal.startsWith('stream=')) {
+            activeCategory = 'All'; 
+            renderCategories();
+            renderGrid();
+            
+            let chanName = hashVal.substring(7);
+            let chan = allChannels.find(c => c.name === chanName);
+            if (chan) {
+                openStream(chan.link, chan.name, null, true);
+            }
+        } else {
+            if (!genres.has(hashVal) && hashVal !== 'All') {
+                activeCategory = 'All';
+                window.location.hash = 'All';
+            } else {
+                activeCategory = hashVal;
+            }
+            renderCategories();
+            renderGrid();
+        }
+    }
+
+    function renderCategories() {
+        let html = '';
+        const order = ['All', 'Favorites', 'Fun-Ment', 'Movies', 'Kids', 'Info', 'News'];
+        order.forEach(genre => {
+            if (genres.has(genre)) {
+                let icon = categoryIcons[genre] || '📺';
+                html += `
+                    <button class="chip ${activeCategory === genre ? 'active' : ''}" 
+                         data-genre="${genre}" tabindex="0" onclick="setCategory('${genre}')">
+                        ${icon} ${genre}
+                    </button>
+                `;
+            }
+        });
+        
+        html += `<button class="chip backup-btn" tabindex="0" onclick="shareFavorites()">🔗 Backup Favs</button>`;
+        
+        let autoFsText = isAutoFS ? 'ON' : 'OFF';
+        let autoFsStyle = isAutoFS ? 'background: linear-gradient(145deg, #2563eb, #1d4ed8); color: #ffffff;' : 'background: linear-gradient(145deg, #1e293b, #0f172a); color: #cbd5e1;';
+        html += `<button class="chip" tabindex="0" onclick="toggleAutoFS()" style="${autoFsStyle} border-color: rgba(255,255,255,0.1); font-weight: bold;">⚙️ Auto-FS: ${autoFsText}</button>`;
+        
+        categoryContainer.innerHTML = html;
+    }
+
+    function toggleAutoFS() {
+        isAutoFS = !isAutoFS;
+        localStorage.setItem('tvAutoFS', isAutoFS);
+        renderCategories(); 
+        showToast(`Auto-Fullscreen is now ${isAutoFS ? 'ON' : 'OFF'}`);
+    }
+
+    function setCategory(genre) {
+        activeCategory = genre;
+        window.location.hash = genre; 
+        document.querySelectorAll('#categoryContainer .chip').forEach(chip => {
+            chip.classList.toggle('active', chip.dataset.genre === genre);
+        });
+        renderGrid();
+    }
+
+    window.addEventListener('hashchange', () => {
+        let hashVal = window.location.hash ? decodeURIComponent(window.location.hash.substring(1)) : 'All';
+        
+        if (hashVal.startsWith('stream=')) {
+            let chanName = hashVal.substring(7);
+            let chan = allChannels.find(c => c.name === chanName);
+            if (chan) {
+                openStream(chan.link, chan.name, null, true);
+            }
+            return;
+        }
+
+        if (playerContainer.style.display === 'flex') {
+            if (typeof autoFsTimer !== 'undefined') clearTimeout(autoFsTimer);
+            
+            playerIframe.removeAttribute('src'); 
+            playerIframe.src = 'about:blank'; 
+            
+            playerContainer.style.display = 'none';
+            appContainer.style.display = 'flex';
+            
+            if (getFullscreenElement()) exitFullscreen();
+        }
+
+        if (genres.has(hashVal) || hashVal === 'All') {
+            activeCategory = hashVal;
+            document.querySelectorAll('#categoryContainer .chip').forEach(chip => {
+                chip.classList.toggle('active', chip.dataset.genre === activeCategory);
+            });
+            renderGrid();
+        }
+    });
+
+    function openStream(url, name, event, fromHash = false) {
+        if (event && event.target.closest('.fav-btn')) return; 
+        
+        if (!fromHash) {
+            window.location.hash = 'stream=' + encodeURIComponent(name);
+            return;
+        }
+        
+        let finalUrl = url;
+        if(finalUrl.includes('?')) {
+             finalUrl += '&autoplay=1&mute=1';
+        } else {
+             finalUrl += '?autoplay=1&mute=1';
+        }
+
+        playerIframe.src = finalUrl;
+        
+        appContainer.style.display = 'none';
+        playerContainer.style.display = 'flex';
+        
+        renderSidebar(name);
+
+        if (typeof autoFsTimer !== 'undefined') clearTimeout(autoFsTimer);
+
+        if (isAutoFS) {
+            // Wait 5 seconds, then auto-fullscreen the video directly without prompting
+            autoFsTimer = setTimeout(() => {
+                const vidCont = document.getElementById('videoWrapper');
+                if (!getFullscreenElement() && playerContainer.style.display === 'flex' && vidCont) {
+                    safeRequestFullscreen(vidCont);
+                }
+            }, 5000);
+        }
+    }
+
+    function closePlayer() {
+        window.location.hash = activeCategory;
+    }
+
+    function renderSidebar(activeChannelName) {
+        if (!sidebarList) return;
+        
+        const catTitle = document.getElementById('sidebarCategoryTitle');
+        if (catTitle) {
+            catTitle.textContent = (activeCategory === 'All' ? 'ALL' : activeCategory.toUpperCase()) + ' CHANNELS';
+        }
+        
+        let filteredList = [];
+        if (activeCategory === 'Favorites') {
+            favorites.forEach(favName => {
+                const chan = allChannels.find(c => c.name === favName);
+                if (chan) filteredList.push(chan);
+            });
+        } else {
+            filteredList = allChannels.filter(c => activeCategory === 'All' || c.genre === activeCategory);
+        }
+        
+        let html = '';
+        filteredList.forEach(c => {
+            const isActive = c.name === activeChannelName;
+            const activeClasses = isActive ? 'active' : '';
+            
+            html += `
+                <div onclick="openStream('${c.link}', '${c.name.replace(/'/g, "\\'")}', null)" class="yt-list-item group ${activeClasses}" tabindex="0">
+                    <div class="flex items-center gap-3">
+                        <img src="${c.image}" loading="lazy" onerror="this.src='https://via.placeholder.com/50x50/000000/ffffff?text=TV'">
+                        <div class="flex flex-col">
+                            <span class="text-[13px] font-semibold text-slate-200 group-hover:text-white transition-colors truncate max-w-[150px]">${c.name}</span>
+                            <span class="text-[9px] text-slate-400 uppercase font-medium mt-0.5">${c.genre}</span>
+                        </div>
+                    </div>
+                    <div class="active-dot"></div>
+                </div>
+            `;
+        });
+        sidebarList.innerHTML = html;
+        
+        setTimeout(() => {
+            const activeEl = sidebarList.querySelector('.yt-list-item.active');
+            if(activeEl) {
+                try { activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+                catch(e) { activeEl.scrollIntoView(); }
+            }
+        }, 100);
+    }
+
+    function handleCardKey(url, name, event) {
+        if (event.key === 'Enter' || event.keyCode === 13 || event.key === ' ' || event.keyCode === 32) {
+            event.preventDefault(); 
+            openStream(url, name, event);
+        }
+    }
+
+    function toggleFav(channelName, event) {
+        if(event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        
+        const index = favorites.indexOf(channelName);
+        if (index > -1) {
+            favorites.splice(index, 1);
+            showToast("Removed from Favs");
+        } else {
+            favorites.push(channelName);
+            showToast("Saved to Favs!");
+        }
+        
+        localStorage.setItem('tvFavoritesLite', JSON.stringify(favorites));
+        renderGrid();
+    }
+
+    function renderGrid() {
+        let filtered = [];
+        if (activeCategory === 'Favorites') {
+            favorites.forEach(favName => {
+                const chan = allChannels.find(c => c.name === favName);
+                if (chan) filtered.push(chan);
+            });
+        } else {
+            filtered = allChannels.filter(c => activeCategory === 'All' || c.genre === activeCategory);
+        }
+
+        if (filtered.length === 0) {
+            grid.innerHTML = activeCategory === 'Favorites' ? 
+                '<div class="msg">No Favs yet. Tap the heart on a channel to save it!</div>' : 
+                '<div class="msg">No channels found.</div>';
+            return;
+        }
+
+        let html = '';
+        filtered.forEach(c => {
+            const isFav = favorites.includes(c.name);
+            html += `
+                <div class="card" tabindex="0" onclick="openStream('${c.link}', '${c.name.replace(/'/g, "\\'")}', event)" onkeydown="handleCardKey('${c.link}', '${c.name.replace(/'/g, "\\'")}', event)">
+                    <button class="fav-btn" onclick="toggleFav('${c.name.replace(/'/g, "\\'")}', event)" tabindex="-1">
+                        ${isFav ? '❤️' : '🤍'}
+                    </button>
+                    <div class="live">LIVE</div>
+                    <img src="${c.image}" loading="lazy" onerror="this.src='https://via.placeholder.com/60x60/000000/ffffff?text=TV'">
+                    <h3>${c.name}</h3>
+                    <p>${c.genre}</p>
+                </div>
+            `;
+        });
+
+        if (activeCategory === 'All') {
+            infinityApps.forEach(app => {
+                html += `
+                    <a href="${app.url}" target="_blank" class="card app-card" style="background: ${app.grad}; justify-content: center; padding-top: 18px;" tabindex="0">
+                        <div class="emoji-icon">${app.icon}</div>
+                        <h3 style="color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.5); font-size: 11px;">${app.name}</h3>
+                        <p style="color: rgba(255,255,255,0.8);">APP</p>
+                    </a>
+                `;
+            });
+        }
+
+        grid.innerHTML = html;
+    }
+
+    function showToast(msg) {
+        let toast = document.getElementById('toastMsg');
+        toast.innerHTML = msg;
+        toast.classList.add('show');
+        setTimeout(() => toast.classList.remove('show'), 3000);
+    }
+
+    function shareFavorites() {
+        if (favorites.length === 0) return showToast("No favs to backup!");
+        const favStr = encodeURIComponent(JSON.stringify(favorites));
+        const shareUrl = window.location.origin + window.location.pathname + '?favs=' + favStr;
+        
+        try {
+            const el = document.createElement('textarea');
+            el.value = shareUrl;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            showToast("Copied! Paste to save.");
+        } catch(e) {
+            window.history.replaceState({}, document.title, shareUrl);
+            showToast("URL updated! Bookmark it.");
+        }
+    }
+
+    window.addEventListener('keydown', function(e) {
+        // Tizen Return/Back Key (10009), LG Back (461), Standard Escape (27)
+        if (e.keyCode === 10009 || e.keyCode === 461 || e.keyCode === 27 || e.key === 'Escape') {
+            if (playerContainer.style.display === 'flex') {
+                if (getFullscreenElement()) {
+                     exitFullscreen();
+                     e.preventDefault(); // Stop Tizen browser from exiting entirely
+                     return;
+                }
+                
+                e.preventDefault(); // Stop Tizen browser from exiting entirely
+                closePlayer();
+            }
+        }
+    });
+
+    function togglePlayerFullscreen() {
+        const vidWrapper = document.getElementById('videoWrapper');
+        if (!getFullscreenElement()) {
+            safeRequestFullscreen(vidWrapper);
+        } else {
+            exitFullscreen();
+        }
+    }
+
+    function safeRequestFullscreen(element, fallbackCallback = null) {
+        try {
+            let promise;
+            if (element.requestFullscreen) {
+                promise = element.requestFullscreen();
+            } else if (element.webkitRequestFullscreen) {
+                element.webkitRequestFullscreen();
+            } else if (element.webkitRequestFullScreen) {
+                element.webkitRequestFullScreen();
+            } else if (element.msRequestFullscreen) {
+                element.msRequestFullscreen();
+            } else if (element.mozRequestFullScreen) {
+                element.mozRequestFullScreen();
+            }
+            
+            if (promise !== undefined) {
+                promise.catch(err => {
+                    console.warn("Fullscreen blocked:", err);
+                    if (fallbackCallback) fallbackCallback();
+                });
+            }
+        } catch (e) {
+            console.error("FS Error:", e);
+            if (fallbackCallback) fallbackCallback();
+        }
+    }
+
+    // D-Pad generic focus handling ensuring elements scroll into view
+    // Enclosed in try/catch for stricter environments (e.g. older Tizen)
+    document.addEventListener('focus', function(e) {
+        if (isSmartTV && e.target && typeof e.target.scrollIntoView === 'function') {
+            if (e.target.classList.contains('card') || e.target.classList.contains('chip') || e.target.classList.contains('yt-list-item')) {
+                try {
+                    e.target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+                } catch(err) {
+                    // Fallback for browsers that don't support smooth scroll objects
+                    e.target.scrollIntoView(); 
+                }
+            }
+        }
+    }, true); 
+
+    window.onload = () => {
+        fetchData();
+        setTimeout(() => {
+            const firstCat = document.querySelector('.chip');
+            if(firstCat && isSmartTV) firstCat.focus();
+        }, 1000);
+    };
+</script>
+
+</body>
+</html>
